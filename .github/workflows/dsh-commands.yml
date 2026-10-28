@@ -1,0 +1,48 @@
+name: DSH commands
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: write
+  checks: read
+  issues: write
+  pull-requests: write
+  actions: read
+concurrency:
+  group: dsh-command-${{ github.event.issue.number }}
+  cancel-in-progress: false
+jobs:
+  command:
+    # Routing only; DSH independently verifies current write permission.
+    if: >-
+      github.repository == 'Doumy666/2048' &&
+      !github.event.issue.pull_request &&
+      github.event.sender.type == 'User' &&
+      github.event.sender.login == 'Doumy666' &&
+      contains(github.event.comment.body, '@dsh')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Run controlled DSH command
+        uses: Lixiaoyiao/DSH-action@23a998ccd209f5422f220f038234a89984f0471c # v0.12.2
+        with:
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          dsh-version: 0.2.1-rc.2
+          dsh-mode: controlled
+          isolation: docker
+          permission-profile: standard
+          allowed-actors: Doumy666
+          allow-write: "true"
+          natural-language-write: "false"
+          run-tests: "true"
+          validation-integrity: strict
+          timeout-minutes: "35"
+          test-commands: >-
+            [["node","scripts/check-syntax.cjs"],["node","--test"]]
+          container-image: docker.io/library/node:24.18.0-bookworm@sha256:5711a0d445a1af54af9589066c646df387d1831a608226f4cd694fc59e745059
