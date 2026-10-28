@@ -1,0 +1,11 @@
+{
+  "name": "2048-dsh-validation",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "check:syntax": "node scripts/check-syntax.cjs",
+    "test": "node --test",
+    "validate": "npm run check:syntax && npm test"
+  },
+  "engines": { "node": ">=24" }
+}
