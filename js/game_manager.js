@@ -9,6 +9,7 @@ function GameManager(size, InputManager, Actuator, StorageManager) {
   this.inputManager.on("move", this.move.bind(this));
   this.inputManager.on("restart", this.restart.bind(this));
   this.inputManager.on("keepPlaying", this.keepPlaying.bind(this));
+  this.inputManager.on("undo", this.undo.bind(this));
 
   this.setup();
 }
@@ -26,6 +27,31 @@ GameManager.prototype.keepPlaying = function () {
   this.actuator.continueGame(); // Clear the game won/lost message
 };
 
+// Undo the most recent effective move (one step only)
+GameManager.prototype.undo = function () {
+  if (!this.undoState) return; // Nothing to undo yet
+
+  var previousState = this.undoState;
+  this.undoState = null; // Only the latest move can be undone
+
+  this.grid        = new Grid(previousState.grid.size,
+                              previousState.grid.cells);
+  this.score       = previousState.score;
+  this.over        = previousState.over;
+  this.won         = previousState.won;
+  this.keepPlaying = previousState.keepPlaying;
+
+  // Restored tiles should not replay the "new tile" spawn animation
+  this.grid.eachCell(function (x, y, tile) {
+    if (tile) {
+      tile.previousPosition = { x: tile.x, y: tile.y };
+    }
+  });
+
+  this.actuator.continueGame(); // Clear the game won/lost message
+  this.actuate();
+};
+
 // Return true if the game is lost, or has won and the user hasn't kept playing
 GameManager.prototype.isGameTerminated = function () {
   return this.over || (this.won && !this.keepPlaying);
@@ -33,6 +59,9 @@ GameManager.prototype.isGameTerminated = function () {
 
 // Set up the game
 GameManager.prototype.setup = function () {
+  // A new or reloaded game never carries a move that can be undone
+  this.undoState = null;
+
   var previousState = this.storageManager.getGameState();
 
   // Reload the game from a previous game if present
@@ -93,7 +122,8 @@ GameManager.prototype.actuate = function () {
     over:       this.over,
     won:        this.won,
     bestScore:  this.storageManager.getBestScore(),
-    terminated: this.isGameTerminated()
+    terminated: this.isGameTerminated(),
+    canUndo:    !!this.undoState
   });
 
 };
@@ -134,6 +164,15 @@ GameManager.prototype.move = function (direction) {
   if (this.isGameTerminated()) return; // Don't do anything if the game's over
 
   var cell, tile;
+
+  // Remember the state before this move so it can be undone
+  var previousState = {
+    grid:        this.grid.serialize(),
+    score:       this.score,
+    over:        this.over,
+    won:         this.won,
+    keepPlaying: this.keepPlaying
+  };
 
   var vector     = this.getVector(direction);
   var traversals = this.buildTraversals(vector);
@@ -180,6 +219,9 @@ GameManager.prototype.move = function (direction) {
   });
 
   if (moved) {
+    // Only an effective move replaces the (single) undo record
+    this.undoState = previousState;
+
     this.addRandomTile();
 
     if (!this.movesAvailable()) {
