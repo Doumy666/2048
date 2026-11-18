@@ -1,0 +1,52 @@
+name: Deploy OGAS 2048 demo
+
+on:
+  push:
+    branches: [ogas/2048-pages-deploy]
+    paths: [.github/workflows/ogas-2048-pages.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.repository == 'Doumy666/2048'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the tested Undo commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ae1bb0b05d5bf30552d6cc0a14994d7d782052f3
+          persist-credentials: false
+      - name: Package the original static files
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "ae1bb0b05d5bf30552d6cc0a14994d7d782052f3"
+          mkdir _site
+          git archive HEAD index.html favicon.ico LICENSE.txt js meta style/main.css style/fonts | tar -xf - -C _site
+          test -f _site/index.html
+          grep -q 'class="undo-button' _site/index.html
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: _site
+
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish static build
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
